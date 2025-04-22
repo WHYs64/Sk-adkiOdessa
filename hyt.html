@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Kalkulator składek - Gildia Odessa</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background-color: #f4f4dc; }
+    input, button { margin: 5px; padding: 8px; }
+    table { margin-top: 20px; border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #999; padding: 8px; text-align: left; }
+    th { background-color: #ddd; }
+    input[type="number"] { width: 70px; }
+    .info-box {
+      background-color: #fff3cd;
+      border: 1px solid #ffeeba;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .info-box ul {
+      margin: 5px 0 0 20px;
+      padding: 0;
+    }
+    .paid {
+      background-color: #d4edda;
+      color: green;
+    }
+    .overdue {
+      background-color: #f8d7da;
+      color: red;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Kalkulator składek dla gildii Odessa</h2>
+
+<div class="info-box">
+  <strong>Informacja:</strong> Mnożnik domyślny zależny od poziomu gracza:
+  <ul>
+    <li>Poziom 1–50 → <strong>x0.2</strong></li>
+    <li>Poziom 51–70 → <strong>x0.5</strong></li>
+    <li>Poziom 71–80 → <strong>x1</strong></li>
+    <li>Poziom 81–99 → <strong>x2</strong></li>
+    <li>Poziom 100+ → <strong>x3</strong></li>
+  </ul>
+</div>
+
+<div id="loginSection">
+  <h3>Wprowadź kod administratora:</h3>
+  <label>Kod: <input type="password" id="accessCode"></label>
+  <button onclick="login()">Zaloguj się</button>
+  <p id="loginMessage" style="color: red;"></p>
+</div>
+
+<div>
+  <label>Całkowita kwota złota:
+    <input type="number" id="totalGold" onchange="calculateShares()" disabled>
+  </label>
+  <button onclick="calculateShares()">Oblicz składki</button>
+  <button onclick="saveData()">Zapisz dane</button>
+</div>
+
+<h3>Dodaj gracza:</h3>
+<label>Nazwa: <input type="text" id="newName" disabled></label>
+<label>Poziom: <input type="number" id="newLevel" disabled></label>
+<label>Ranga: <input type="text" id="newRank" disabled></label>
+<button id="addPlayerBtn" onclick="addPlayer()" disabled>Dodaj gracza</button>
+
+<table id="resultTable">
+  <thead>
+    <tr>
+      <th>Gracz</th>
+      <th>Ranga</th>
+      <th>Poziom</th>
+      <th>Mnożnik</th>
+      <th>Składka</th>
+      <th>Akcje</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  let isAdmin = false;
+  let players = [];
+  let totalGold = 2000000;
+
+  const defaultPlayers = [
+    { name: "Rado899", rank: "Mistrz", level: 86, multiplier: 2, paid: false, overdue: false },
+    { name: "Zeus", rank: "Admin", level: 100, multiplier: 3, paid: false, overdue: false },
+    { name: "Why", rank: "Admin", level: 99, multiplier: 2, paid: false, overdue: false },
+    { name: "Miczi94PL", rank: "Admin", level: 90, multiplier: 2, paid: false, overdue: false },
+    { name: "KAZNODZIEJA", rank: "Admin", level: 89, multiplier: 2, paid: false, overdue: false },
+    { name: "Coleslaw", rank: "General", level: 91, multiplier: 2, paid: false, overdue: false },
+    { name: "Andriej", rank: "General", level: 61, multiplier: 1, paid: false, overdue: false },
+    { name: "Kacapex", rank: "General", level: 36, multiplier: 0.5, paid: false, overdue: false },
+    { name: "TURBOMIS", rank: "General", level: 59, multiplier: 1, paid: false, overdue: false },
+    { name: "wonsz", rank: "General", level: 60, multiplier: 1, paid: false, overdue: false },
+    { name: "666", rank: "General", level: 51, multiplier: 0.5, paid: false, overdue: false },
+    { name: "Kalion", rank: "General", level: 86, multiplier: 2, paid: false, overdue: false },
+    { name: "PrimusLucillus", rank: "General", level: 86, multiplier: 2, paid: false, overdue: false },
+    { name: "Leo", rank: "General", level: 28, multiplier: 0.2, paid: false, overdue: false },
+    { name: "AurigaCapito", rank: "General", level: 48, multiplier: 0.5, paid: false, overdue: false },
+    { name: "WaleczneSerce", rank: "General", level: 71, multiplier: 1, paid: false, overdue: false },
+    { name: "fatonik", rank: "General", level: 84, multiplier: 2, paid: false, overdue: false },
+    { name: "SzachMateusz", rank: "General", level: 76, multiplier: 1, paid: false, overdue: false },
+    { name: "Sqaza", rank: "General", level: 57, multiplier: 1, paid: false, overdue: false },
+    { name: "Rozmiar", rank: "General", level: 84, multiplier: 2, paid: false, overdue: false },
+    { name: "DrZuolsBack", rank: "General", level: 84, multiplier: 2, paid: false, overdue: false },
+    { name: "Zabor", rank: "General", level: 28, multiplier: 0.2, paid: false, overdue: false }
+  ];
+
+  function loadData() {
+    const saved = localStorage.getItem("odessaData");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      players = parsed.players || defaultPlayers;
+      totalGold = parsed.totalGold || 2000000;
+    } else {
+      players = defaultPlayers;
+    }
+    document.getElementById("totalGold").value = totalGold;
+  }
+
+  function saveData() {
+    localStorage.setItem("odessaData", JSON.stringify({
+      players,
+      totalGold: parseFloat(document.getElementById("totalGold").value)
+    }));
+    alert("Dane zapisane!");
+  }
+
+  function login() {
+    const code = document.getElementById("accessCode").value;
+    if (code === "Odessa64") {
+      isAdmin = true;
+      document.getElementById("loginMessage").textContent = "Zalogowano jako administrator.";
+      document.getElementById("totalGold").disabled = false;
+      document.getElementById("newName").disabled = false;
+      document.getElementById("newLevel").disabled = false;
+      document.getElementById("newRank").disabled = false;
+      document.getElementById("addPlayerBtn").disabled = false;
+      renderTable();
+    } else {
+      document.getElementById("loginMessage").textContent = "Nieprawidłowy kod.";
+    }
+  }
+
+  function renderTable() {
+    const tbody = document.querySelector("#resultTable tbody");
+    tbody.innerHTML = "";
+
+    players.forEach((player, index) => {
+      const row = `<tr class="${player.paid ? 'paid' : player.overdue ? 'overdue' : ''}">
+        <td>${player.name}</td>
+        <td>${player.rank}</td>
+        <td><input type="number" id="level-${index}" value="${player.level}" onchange="updatePlayer(${index})" ${isAdmin ? "" : "disabled"}></td>
+        <td><input type="number" id="multiplier-${index}" value="${player.multiplier}" step="0.1" onchange="updatePlayer(${index})" ${isAdmin ? "" : "disabled"}></td>
+        <td id="share-${index}">${calculateShare(player)}</td>
+        <td>
+          ${isAdmin ? `
+            <button onclick="togglePaid(${index})">Wpłacił</button>
+            <button onclick="toggleOverdue(${index})">Zalega</button>
+            <button onclick="removePlayer(${index})">Usuń</button>
+          ` : ""}
+        </td>
+      </tr>`;
+      tbody.innerHTML += row;
+    });
+  }
+
+  function calculateShare(player) {
+    const totalGold = parseFloat(document.getElementById("totalGold").value);
+    const totalWeight = players.reduce((sum, p) => sum + (p.level * p.multiplier), 0);
+    const share = (player.level * player.multiplier / totalWeight) * totalGold;
+    return formatGold(Math.round(share)) + " złota";
+  }
+
+  function calculateShares() {
+    renderTable();
+  }
+
+  function formatGold(value) {
+    return value.toLocaleString("pl-PL");
+  }
+
+  function getDefaultMultiplier(level) {
+    if (level >= 100) return 3;
+    if (level >= 81) return 2;
+    if (level >= 71) return 1;
+    if (level >= 51) return 0.5;
+    return 0.2;
+  }
+
+  function addPlayer() {
+    const name = document.getElementById("newName").value;
+    const level = parseInt(document.getElementById("newLevel").value);
+    const rank = document.getElementById("newRank").value;
+
+    if (!name || isNaN(level) || !rank) {
+      alert("Proszę uzupełnić wszystkie dane!");
+      return;
+    }
+
+    players.push({
+      name, rank, level,
+      multiplier: getDefaultMultiplier(level),
+      paid: false, overdue: false
+    });
+
+    document.getElementById("newName").value = "";
+    document.getElementById("newLevel").value = "";
+    document.getElementById("newRank").value = "";
+    renderTable();
+    calculateShares();
+  }
+
+  function updatePlayer(index) {
+    const level = parseInt(document.getElementById(`level-${index}`).value);
+    const multiplier = parseFloat(document.getElementById(`multiplier-${index}`).value);
+    players[index].level = level;
+    players[index].multiplier = multiplier;
+    renderTable();
+  }
+
+  function togglePaid(index) {
+    players[index].paid = !players[index].paid;
+    players[index].overdue = false;
+    renderTable();
+  }
+
+  function toggleOverdue(index) {
+    players[index].overdue = !players[index].overdue;
+    players[index].paid = false;
+    renderTable();
+  }
+
+  function removePlayer(index) {
+    if (confirm("Czy na pewno usunąć gracza?")) {
+      players.splice(index, 1);
+      renderTable();
+    }
+  }
+
+  // Start
+  loadData();
+  renderTable();
+  calculateShares();
+</script>
+
+</body>
+</html>
